@@ -2,6 +2,8 @@
 name = "m2pa"
 version = "0.1.0"
 edition = "2021"
+description = "Rust implementation of https://www.ietf.org/rfc/rfc4165.txt"
+authors = ["Matthias van der Vlies <mvdvlies@gmail.com>"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
