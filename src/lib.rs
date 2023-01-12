@@ -1,83 +1,62 @@
 use std::fmt;
 
-/*
-   2.1.  Common Message Header
-
-   The protocol messages for M2PA require a message header structure
-   that contains a version, message class, message type, and message
-   length.  The header structure is shown in Figure 5.
-
-       0                   1                   2                   3
-       0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
-      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-      |    Version    |     Spare     | Message Class | Message Type  |
-      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-      |                        Message Length                         |
-      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-
-                     Figure 5.  Common Message Header
- */
-
+/// The protocol messages for M2PA require a message header structure
+/// that contains a version, message class, message type, and message
+/// length. The header structure is shown in Figure 5.
+/// ```ignore
+/// 0                   1                   2                   3
+/// 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+/// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+/// |    Version    |     Spare     | Message Class | Message Type  |
+/// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+/// |                        Message Length                         |
+/// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+/// 
+/// Figure 5.  Common Message Header
+/// ```        
+/// 
+/// See <https://www.rfc-editor.org/rfc/rfc4165.html#section-2.1>
 #[repr(C, packed)]
 #[derive(Debug, Copy, Clone)]
 pub struct CommonMessageHeader {
-    /*
-       2.1.1.  Version
-
-       The version field contains the version of M2PA.  The supported
-       versions are:
-
-            Value
-          (decimal)  Version
-          ---------  -------
-              1      Release 1.0 of M2PA protocol
-     */
+    /// The version field contains the version of M2PA.  The supported
+    /// versions are:
+    /// ```ignore
+    ///     Value
+    ///   (decimal)  Version
+    ///   ---------  -------
+    ///       1      Release 1.0 of M2PA protocol
+    /// ```
     pub version: u8,
-    /*
-       2.1.2.  Spare
-
-       The Spare field SHOULD be set to all zeroes (0's) by the sender and
-       ignored by the receiver.  The Spare field SHOULD NOT be used for
-       proprietary information.
-     */
+    
+    /// The Spare field SHOULD be set to all zeroes (0's) by the sender and
+    /// ignored by the receiver.  The Spare field SHOULD NOT be used for
+    /// proprietary information.
     pub spare: u8,
 
-    /*
-       2.1.3.  Message Class
-
-       The following List contains the valid Message Classes:
-
-            Value
-          (decimal)  Message Class
-          ---------  -------------
-             11      M2PA Messages
-
-       Other values are invalid for M2PA.
-     */
+    /// The following List contains the valid Message Classes:
+    /// ```ignore
+    ///     Value
+    ///   (decimal)  Message Class
+    ///   ---------  -------------
+    ///      11      M2PA Messages
+    /// ```
+    /// Other values are invalid for M2PA.
     pub message_class: u8,
 
-    /*
-        2.1.4.  Message Type
-
-        The following list contains the message types for the defined
-        messages.
-
-            Value
-          (decimal)  Message Type
-          ---------  -------------
-              1      User Data
-              2      Link Status
-
-        Other values are invalid.
-     */
+    /// The following list contains the message types for the defined messages.
+    /// ```ignore
+    ///     Value
+    ///   (decimal)  Message Type
+    ///   ---------  -------------
+    ///       1      User Data
+    ///       2      Link Status
+    /// ```
+    ///Other values are invalid.
     pub message_type: u8,
 
-    /*
-        2.1.5.  Message Length
-
-        The Message Length defines the length of the message in octets,
-        including the Common Header.
-     */
+    /// The Message Length defines the length of the message in octets,
+    /// including the Common Header.
     pub message_length: u32
 }
 
