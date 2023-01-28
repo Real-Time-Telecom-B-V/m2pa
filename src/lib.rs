@@ -1,5 +1,19 @@
+#[macro_use]
+extern crate slice_as_array;
+extern crate matches;
+
 use std::fmt;
-use modular_bitfield::{bitfield, specifiers::{B8, B24, B32}};
+use modular_bitfield_msb::{bitfield, specifiers::{B8, B24, B32}};
+
+// Taken from https://stackoverflow.com/questions/53124930/how-do-you-test-for-a-specific-rust-error/53124931
+macro_rules! assert_err {
+    ($expression:expr, $($pattern:tt)+) => {
+        match $expression {
+            $($pattern)+ => (),
+            ref e => panic!("expected `{}` but got `{:?}`", stringify!($($pattern)+), e),
+        }
+    }
+}
 
 /// The protocol messages for M2PA require a message header structure
 /// that contains a version, message class, message type, and message
@@ -19,6 +33,7 @@ use modular_bitfield::{bitfield, specifiers::{B8, B24, B32}};
 /// See <https://www.rfc-editor.org/rfc/rfc4165.html#section-2.1>
 /// 
 /// 
+#[derive(Clone, Copy)]
 #[bitfield]
 pub struct CommonMessageHeader {
     /// The version field contains the version of M2PA.  The supported
@@ -34,6 +49,7 @@ pub struct CommonMessageHeader {
     /// The Spare field SHOULD be set to all zeroes (0's) by the sender and
     /// ignored by the receiver.  The Spare field SHOULD NOT be used for
     /// proprietary information.
+    #[skip(setters)]
     pub spare: B8,
 
     /// The following List contains the valid Message Classes:
@@ -62,69 +78,73 @@ pub struct CommonMessageHeader {
     pub message_length: B32
 }
 
-impl fmt::Display for CommonMessageHeader {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "M2PA Common Message Header [version={}, spare={}, class={}, type={}, length={}]", self.version(), self.spare(), self.message_class(), self.message_type(), self.message_length().to_be())
+impl CommonMessageHeader {
+
+    /// Message validation against RFC 4165
+    /// 
+    /// # Arguments
+    /// 
+    /// * `header` - Common Message Header to validate against RFC 4165 and sensible defaults enforced by this library
+    /// 
+    /// # Examples
+    /// 
+    /// ```
+    /// let common_message_header = m2pa::CommonMessageHeader::new()
+    /// .with_version(1)
+    /// .with_message_class(11)
+    /// .with_message_type(1)
+    /// .with_message_length(20);
+    /// 
+    /// match m2pa::CommonMessageHeader::validate(common_message_header) {
+    ///     Ok(valid) => println!("Common Message Header valid! => {}", valid),
+    ///     Err(e) => panic!("Common Message Header not valid, {}", e)
+    /// }
+    /// ```
+    pub fn validate(header: CommonMessageHeader) -> Result<CommonMessageHeader, str&> { 
+        if header.version() != 1 { return Err(String::from("Version should always be 1")) }
+        if header.spare() != 0 { return Err(String::from("Spare should be set to 0")) }
+        if header.message_class() != 11  { return Err(String::from("Message class invalid")) }
+        if header.message_type() != 1 && header.message_type() != 2 { return Err(String::from("Message type can only be User Data (1) or Link Status (2)")) }
+        if header.message_length() > 240 { return Err(String::from("We expect header + MSU to be less than 240")) }
+        Ok(header)
+    }
+
+    /// Decodes an validates an array u8 into a CommonMessageHeader struct
+    ///
+    /// # Arguments
+    ///
+    /// * `bytes` - An array of 8 bytes (u8) containing the data for the Common Message Header
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let encoded: [u8;8] = [1, 0, 11, 1, 100, 0, 0, 0];
+    /// let decoded = m2pa::CommonMessageHeader::decode(encoded);
+    /// ```
+    pub fn decode(bytes: [u8; 8]) -> Result<CommonMessageHeader, String> {
+        // As the compiler ensures that we feed an array of 8 bytes there we only need to introspect if the decoded values are sensible
+        CommonMessageHeader::validate(CommonMessageHeader::from_bytes(bytes))
+    }
+
+    //
+    pub fn encode(self) -> Result<[u8; 8], String> {
+        match CommonMessageHeader::validate(self) {
+            Ok(valid) => Ok(valid.into_bytes()),
+            Err(e) => Err(e)
+        }
     }
 }
 
-/// Decodes an array u8 into a CommonMessageHeader struct
-///
-/// # Arguments
-///
-/// * `encoded` - An array of 8 bytes (u8) containing the data for the Common Message Header
-///
-/// # Examples
-///
-/// ```
-/// let encoded: &[u8] = &[1, 0, 11, 1, 100, 0, 0, 0];
-/// let decoded = unsafe { m2pa::decode_common_message_header(encoded) };
-/// ```
-pub fn decode_common_message_header(encoded: [u8;8]) -> CommonMessageHeader {
-    let common_message_header = CommonMessageHeader::from_bytes(encoded);
-
-    // Message validation against RFC 4165
-    assert!(common_message_header.version() == 1); // Version should alwyas be 1
-    assert!(common_message_header.spare() == 0); // Spare should be set to 0
-    assert!(common_message_header.message_class() == 11); // M2PA message
-    assert!(common_message_header.message_type() == 1 || common_message_header.message_type() == 2); // Either 1 - User data or 2 - Link Status
-    assert!(common_message_header.message_length() > 240); // We expect header + MSU to be less than 240
-
-    common_message_header
-}
-
-/// Encodes a CommonMessageHeader struct into an array of u8
-///
-/// # Arguments
-///
-/// * `header` - The CommonMessageHeader to encode
-///
-/// # Examples
-///
-/// ```
-/// let common_message_header = CommonMessageHeader::new()
-///   .with_version(1)
-///   .with_spare(0)
-///   .with_message_class(11)
-///   .with_message_type(1)
-///   .with_message_length(20);
-/// 
-/// let encoded = m2pa::encode_common_message_header(common_message_header) };
-/// ```
-pub fn encode_common_message_header(common_message_header: CommonMessageHeader) -> [u8; 8] {
-
-    // Message validation against RFC 4165
-    assert!(common_message_header.version() == 1); // Version should alwyas be 1
-    assert!(common_message_header.spare() == 0); // Spare should be set to 0
-    assert!(common_message_header.message_class() == 11); // M2PA message
-    assert!(common_message_header.message_type() == 1 || common_message_header.message_type() == 2); // Either 1 - User data or 2 - Link Status
-    assert!(common_message_header.message_length() < 240); // We expect header + MSU to be less than 240
-
-    common_message_header.into_bytes()
+impl fmt::Display for CommonMessageHeader {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "M2PA Common Message Header [version={}, spare={}, class={}, type={}, length={}]", self.version(), self.spare(), self.message_class(), self.message_type(), self.message_length())
+    }
 }
 
 #[cfg(test)]
 mod common_message_header_tests {
+    use core::panic;
+
     use super::*;
 
     //
@@ -132,43 +152,43 @@ mod common_message_header_tests {
     // 
     #[test]
     fn decode_common_message_header_correct() {
-        let buf: [u8;8] = [1, 0, 11, 1, 100, 0, 0, 0];
-        decode_common_message_header(buf);
+        let buf: [u8;8] = [1, 0, 11, 1, 0, 0, 0, 100];
+        CommonMessageHeader::decode(buf)
     }
 
     #[test]
-    #[should_panic(expected = "assertion failed: common_message_header.version == 1")]
+    #[should_panic(expected = "assertion failed: common_message_header.version() == 1")]
     fn decode_common_message_header_version_wrong() {
         let buf: [u8;8] = [0, 0, 11, 1, 100, 0, 0, 0];
-        decode_common_message_header(buf);
+        assert_err!(CommonMessageHeader::decode(buf), Error(String::from("dingen")));
     }
 
     #[test]
-    #[should_panic(expected = "assertion failed: common_message_header.spare == 0")]
+    #[should_panic(expected = "assertion failed: common_message_header.spare() == 0")]
     fn decode_common_message_header_spare_wrong() {
         let buf: [u8;8] = [1, 1, 11, 1, 100, 0, 0, 0];
-        decode_common_message_header(buf);
+        CommonMessageHeader::decode(buf);
     }
 
     #[test]
-    #[should_panic(expected = "assertion failed: common_message_header.message_class == 11")]
+    #[should_panic(expected = "assertion failed: common_message_header.message_class() == 11")]
     fn decode_common_message_header_message_class_wrong() {
         let buf: [u8;8] = [1, 0, 12, 1, 100, 0, 0, 0];
-        decode_common_message_header(buf);
+        CommonMessageHeader::decode(buf);
     }
 
     #[test]
-    #[should_panic(expected = "assertion failed: common_message_header.message_type == 1")]
+    #[should_panic(expected = "assertion failed: common_message_header.message_type() == 1")]
     fn decode_common_message_header_message_type_wrong() {
         let buf: [u8;8] = [1, 0, 11, 123, 100, 0, 0, 0];
-        decode_common_message_header(buf);
+        CommonMessageHeader::decode(buf);
     }
 
     #[test]
-    #[should_panic(expected = "assertion failed: common_message_header.message_length > 240")]
+    #[should_panic(expected = "assertion failed: common_message_header.message_length() < 240")]
     fn decode_common_message_header_message_length_wrong() {
         let buf: [u8;8] = [1, 0, 11, 1, 0, 0, 0, 245];
-        decode_common_message_header(buf);
+        CommonMessageHeader::decode(buf);
     }
 
     //
@@ -179,23 +199,29 @@ mod common_message_header_tests {
     fn encode_common_message_header_correct() {
         let common_message_header = CommonMessageHeader::new()
             .with_version(1)
-            .with_spare(0)
             .with_message_class(11)
             .with_message_type(1)
             .with_message_length(20);
 
-        let serialized = encode_common_message_header(common_message_header);
+        match common_message_header.encode() {
+            Ok(serialized) => {
+                println!("{:?}", serialized);
+                // By parsing the message again we make sure that it was encoded directly as it should be 1:1 with the original
+                match CommonMessageHeader::decode(serialized) {
+                    Ok(parsed) => {
+                        assert_eq!(parsed.version(), 1);
+                        assert_eq!(parsed.spare(), 0);
+                        assert_eq!(parsed.message_class(), 11);
+                        assert_eq!(parsed.message_type(), 1);
+                        assert_eq!(parsed.message_length(), 20);
+                    },
+                    Err(e) => panic!("Could not decode common message header {}", e)
+                }
+            },
+            Err(e) => panic!("Could not encode common message header {}", e)
+        }
 
-        assert_eq!(serialized.len(), 8); // Common Message Header should be 8 bytes
-
-        // By parsing the message again we make sure that it was encoded directly as it should be 1:1 with the original
-        let parsed = decode_common_message_header(serialized);
-
-        assert_eq!(parsed.version(), 1);
-        assert_eq!(parsed.spare(), 0);
-        assert_eq!(parsed.message_class(), 11);
-        assert_eq!(parsed.message_type(), 1);
-        assert_eq!(parsed.message_length(), 239);
+        
     }
 
     // TODO test with wrong message class etc
@@ -282,14 +308,6 @@ mod m2pa_header_tests {
        decode_m2pa_header(buf);
     }
 
-    /*#[test]
-    #[should_panic(expected = "Common Message Header should be 8 bytes")]
-    fn decode_m2pa_header_not_aligned_too_short() {
-        let buf: &[u8] = &[1, 0, 11, 1];
-        unsafe { decode_m2pa_header(buf) };
-    }*/
-
-
     //
     // encode_m2pa_header tests
     // 
@@ -313,11 +331,8 @@ mod m2pa_header_tests {
 
 }
 
-
-#[macro_use] extern crate slice_as_array;
 #[cfg(test)]
 mod m2pa_tests {
-    use crate::{decode_m2pa_header, decode_common_message_header};
 
     fn slice_as_hash(xs: &[u8]) -> &[u8; 8] {
         println!("{:?}", xs);
