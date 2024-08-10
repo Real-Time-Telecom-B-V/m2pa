@@ -1,4 +1,5 @@
-#[macro_use]
+ 
+ 
 extern crate slice_as_array;
 extern crate matches;
 
@@ -338,7 +339,7 @@ mod m2pa_tests {
 
     fn slice_as_hash(xs: &[u8]) -> &[u8; 8] {
         println!("{:?}", xs);
-        slice_as_array!(xs, [u8; 8]).expect("bad hash length")
+        todo!("Implement this function")
     }
 
     #[test]
