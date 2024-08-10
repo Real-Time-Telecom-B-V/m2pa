@@ -6,15 +6,6 @@ extern crate matches;
 use std::fmt;
 use modular_bitfield_msb::{bitfield, specifiers::{B8, B24, B32}};
 
-// Taken from https://stackoverflow.com/questions/53124930/how-do-you-test-for-a-specific-rust-error/53124931
-macro_rules! assert_err {
-    ($expression:expr, $($pattern:tt)+) => {
-        match $expression {
-            $($pattern)+ => (),
-            ref e => panic!("expected `{}` but got `{:?}`", stringify!($($pattern)+), e),
-        }
-    }
-}
 
 /// The protocol messages for M2PA require a message header structure
 /// that contains a version, message class, message type, and message
