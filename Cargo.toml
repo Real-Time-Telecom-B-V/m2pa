@@ -48,7 +48,7 @@ extension-module = ["python", "pyo3/extension-module"]
 # hex is used only by the examples, integration tests, and unit tests to express
 # wire vectors compactly — the codec itself has no hex dependency.
 hex = "0.4"
-criterion = "0.5"
+criterion = "0.8"
 
 [[bench]]
 name = "codec"
