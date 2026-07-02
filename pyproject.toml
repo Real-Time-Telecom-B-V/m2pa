@@ -12,7 +12,7 @@ description = "Rust-backed M2PA (RFC 4165) codec + link state machine for Python
 readme = "README.md"
 requires-python = ">=3.9"
 license = { text = "MIT" }
-authors = [{ name = "Matthias van der Vlies" }]
+authors = [{ name = "Real Time Telecom B.V." }]
 keywords = ["m2pa", "ss7", "sigtran", "sctp", "mtp3"]
 classifiers = [
     "Development Status :: 5 - Production/Stable",
@@ -26,8 +26,8 @@ classifiers = [
 dynamic = ["version"]
 
 [project.urls]
-Homepage = "https://github.com/killdashnine/m2pa"
-Repository = "https://github.com/killdashnine/m2pa"
+Homepage = "https://github.com/Real-Time-Telecom-B-V/m2pa"
+Repository = "https://github.com/Real-Time-Telecom-B-V/m2pa"
 
 [tool.maturin]
 # Mixed layout: compiled ext at `m2pa._m2pa`, pure-Python shim under python/.

@@ -4,11 +4,11 @@ version = "1.0.0"
 edition = "2021"
 rust-version = "1.80"
 description = "Pure-Rust M2PA (RFC 4165) codec + link state machine — MTP2 Peer-to-Peer Adaptation over SCTP"
-authors = ["Matthias van der Vlies <674985+killdashnine@users.noreply.github.com>"]
+authors = ["Real Time Telecom B.V."]
 license = "MIT"
 readme = "README.md"
-repository = "https://github.com/killdashnine/m2pa"
-homepage = "https://github.com/killdashnine/m2pa"
+repository = "https://github.com/Real-Time-Telecom-B-V/m2pa"
+homepage = "https://github.com/Real-Time-Telecom-B-V/m2pa"
 keywords = ["m2pa", "ss7", "sigtran", "sctp", "mtp3"]
 categories = ["network-programming", "encoding"]
 # Keep CI/build scaffolding out of the crates.io package. `python/` (the wheel's

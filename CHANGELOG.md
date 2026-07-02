@@ -33,4 +33,4 @@ source tree.
   integration vectors, and CI (fmt / clippy / test / bench-compile / leak gate /
   wheel + pytest / cargo-deny).
 
-[1.0.0]: https://github.com/killdashnine/m2pa/releases/tag/v1.0.0
+[1.0.0]: https://github.com/Real-Time-Telecom-B-V/m2pa/releases/tag/v1.0.0
