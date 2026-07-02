@@ -1,5 +1,10 @@
 # m2pa
 
+[![crates.io](https://img.shields.io/crates/v/m2pa.svg)](https://crates.io/crates/m2pa)
+[![docs.rs](https://docs.rs/m2pa/badge.svg)](https://docs.rs/m2pa)
+[![CI](https://github.com/Real-Time-Telecom-B-V/m2pa/actions/workflows/ci.yml/badge.svg)](https://github.com/Real-Time-Telecom-B-V/m2pa/actions/workflows/ci.yml)
+[![license](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
 A pure-Rust **M2PA ([RFC 4165](https://www.rfc-editor.org/rfc/rfc4165.html))**
 codec and link state machine — the **MTP2 Peer-to-Peer Adaptation Layer** that
 carries SS7 MTP3 signalling over SCTP. It ships as **both** a Rust crate
