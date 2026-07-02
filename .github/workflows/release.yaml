@@ -58,9 +58,12 @@ jobs:
       # skip — so re-running a tag, or tagging the bootstrap release, stays green.
       - name: Already on crates.io?
         id: check
+        # crates.io returns 403 to requests without a descriptive User-Agent, so
+        # the -A header is mandatory (a bare curl would 403 and look "unpublished").
         run: |
           ver="${GITHUB_REF_NAME#v}"
-          if curl -sf "https://crates.io/api/v1/crates/m2pa/${ver}" -o /dev/null; then
+          ua="m2pa-release-ci (github.com/Real-Time-Telecom-B-V/m2pa)"
+          if curl -sf -A "$ua" "https://crates.io/api/v1/crates/m2pa/${ver}" -o /dev/null; then
             echo "exists=true" >> "$GITHUB_OUTPUT"
             echo "::notice::m2pa ${ver} already on crates.io — skipping publish."
           else
