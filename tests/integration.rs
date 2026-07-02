@@ -1,28 +1,34 @@
-//! Integration tests — M2PA packet decoding from known hex dumps.
+//! Integration tests — M2PA message encode/decode against RFC 4165 wire vectors.
+//!
+//! Every vector here is derived straight from the spec, not captured traffic. A
+//! Link Status message is pure control signalling — the common header
+//! (version/class/type/length), the BSN/FSN sequence words, and a 4-byte state —
+//! so its bytes are fully determined by RFC 4165 §2/§3 and carry no user data.
+//! The User Data vectors use synthetic MTP3 payloads. Where a test pins a hex
+//! string, an accompanying encode test proves the crate's encoder reproduces it.
 
 use m2pa::*;
 
-/// Decode a real M2PA Link Status message: Proving Emergency.
-/// Captured from a Wireshark SS7 trace.
-///
-/// Hex: 01000b020000001400ffffff00ffffff00000003
-///
-/// Breakdown:
-///   Common Header (8 bytes):
-///     01          Version = 1
-///     00          Spare = 0
-///     0b          Message Class = 11 (M2PA)
-///     02          Message Type = 2 (Link Status)
-///     00000014    Message Length = 20
-///   M2PA Header (8 bytes):
-///     00ffffff    BSN = 0xFFFFFF (initial)
-///     00ffffff    FSN = 0xFFFFFF (initial)
-///   Body (4 bytes):
-///     00000003    State = 3 (Proving Emergency)
+/// Build the 20-byte wire form of a Link Status message with the given state,
+/// using the RFC's initial BSN/FSN sentinel (`0xFFFFFF`). Hand-assembled from
+/// the spec so the decode tests below have an independent oracle.
+fn link_status_wire(state_value: u32) -> Vec<u8> {
+    let mut v = Vec::with_capacity(20);
+    v.extend_from_slice(&[0x01, 0x00, 0x0b, 0x02]); // version, spare, class=11, type=2
+    v.extend_from_slice(&20u32.to_be_bytes()); // message length
+    v.extend_from_slice(&0x00FF_FFFFu32.to_be_bytes()); // BSN
+    v.extend_from_slice(&0x00FF_FFFFu32.to_be_bytes()); // FSN
+    v.extend_from_slice(&state_value.to_be_bytes()); // state
+    v
+}
+
+// ── Link Status ─────────────────────────────────────────────────────────────
+
 #[test]
-fn decode_real_link_status_proving_emergency() {
-    let hex_str = "01000b020000001400ffffff00ffffff00000003";
-    let bytes = hex::decode(hex_str).unwrap();
+fn decode_link_status_proving_emergency() {
+    // RFC 4165 wire form of a Proving Emergency (state = 3) Link Status.
+    let bytes = hex::decode("01000b020000001400ffffff00ffffff00000003").unwrap();
+    assert_eq!(bytes, link_status_wire(3)); // hex string == hand-assembled oracle
 
     let msg = M2paMessage::decode(&bytes).unwrap();
     match msg {
@@ -31,188 +37,190 @@ fn decode_real_link_status_proving_emergency() {
             assert_eq!(fsn, 0xFFFFFF);
             assert_eq!(message.state, LinkState::ProvingEmergency);
         }
-        _ => panic!("Expected LinkStatus"),
+        _ => panic!("expected LinkStatus"),
     }
 }
 
-/// Encode a Link Status Ready and verify hex output.
 #[test]
-fn encode_link_status_ready() {
+fn encode_link_status_ready_matches_wire() {
     let msg = M2paMessage::LinkStatus {
         bsn: 0xFFFFFF,
         fsn: 0xFFFFFF,
         message: LinkStatusMessage::new(LinkState::Ready),
     };
-    let encoded = msg.encode().unwrap();
-
-    // Verify the state field at the end
-    let state_bytes = &encoded[16..20];
-    assert_eq!(state_bytes, &[0x00, 0x00, 0x00, 0x04]); // Ready = 4
+    // The encoder reproduces the RFC wire form exactly (state Ready = 4).
+    assert_eq!(msg.encode().unwrap(), link_status_wire(4));
 }
 
-/// Link Status Alignment message.
 #[test]
-fn link_status_alignment() {
-    let msg = M2paMessage::LinkStatus {
-        bsn: 0,
-        fsn: 0,
-        message: LinkStatusMessage::new(LinkState::Alignment),
-    };
-    let encoded = msg.encode().unwrap();
-    let decoded = M2paMessage::decode(&encoded).unwrap();
-
-    match decoded {
-        M2paMessage::LinkStatus { bsn, fsn, message } => {
-            assert_eq!(bsn, 0);
-            assert_eq!(fsn, 0);
-            assert_eq!(message.state, LinkState::Alignment);
+fn all_link_states_round_trip_and_match_wire() {
+    let cases = [
+        (1u32, LinkState::Alignment),
+        (2, LinkState::ProvingNormal),
+        (3, LinkState::ProvingEmergency),
+        (4, LinkState::Ready),
+        (5, LinkState::ProcessorOutage),
+        (6, LinkState::ProcessorRecovered),
+        (7, LinkState::Busy),
+        (8, LinkState::BusyEnded),
+    ];
+    for (value, state) in cases {
+        // decode(wire) → state
+        let decoded = M2paMessage::decode(&link_status_wire(value)).unwrap();
+        match decoded {
+            M2paMessage::LinkStatus { message, .. } => {
+                assert_eq!(message.state, state, "decode failed for state {value}")
+            }
+            _ => panic!("expected LinkStatus for state {value}"),
         }
-        _ => panic!("Expected LinkStatus"),
+        // encode(state) → wire
+        let encoded = M2paMessage::LinkStatus {
+            bsn: 0xFFFFFF,
+            fsn: 0xFFFFFF,
+            message: LinkStatusMessage::new(state),
+        }
+        .encode()
+        .unwrap();
+        assert_eq!(
+            encoded,
+            link_status_wire(value),
+            "encode failed for {state}"
+        );
     }
 }
 
-/// User Data message with MTP3 MSU payload.
 #[test]
-fn user_data_with_msu() {
+fn decode_rejects_unknown_link_state() {
+    // State 9 is not defined in RFC 4165 §3.3.
+    let err = M2paMessage::decode(&link_status_wire(9)).unwrap_err();
+    assert!(matches!(err, M2paError::InvalidLinkStatus(9)));
+}
+
+// ── User Data ───────────────────────────────────────────────────────────────
+
+#[test]
+fn user_data_with_synthetic_msu_round_trips() {
+    // Synthetic MTP3 MSU: SIO + a fabricated routing label + SCCP-ish header.
     let msu = vec![
         0x83, // SIO: NI=National, SI=SCCP
-        0x01, 0x00, 0x00, 0x00, // Routing label (ITU)
-        0x09, 0x00, 0x03, 0x05, // SCCP UDT header
+        0x01, 0x00, 0x00, 0x00, // routing label (fabricated point codes)
+        0x09, 0x00, 0x03, 0x05, // SCCP UDT-ish header
     ];
-
     let msg = M2paMessage::UserData {
         bsn: 100,
         fsn: 101,
-        message: UserDataMessage::new(0, msu.clone()),
+        message: UserDataMessage::new(2, msu.clone()),
     };
 
-    let encoded = msg.encode().unwrap();
-    let decoded = M2paMessage::decode(&encoded).unwrap();
-
+    let decoded = M2paMessage::decode(&msg.encode().unwrap()).unwrap();
     match decoded {
         M2paMessage::UserData { bsn, fsn, message } => {
             assert_eq!(bsn, 100);
             assert_eq!(fsn, 101);
-            assert_eq!(message.priority, 0);
+            assert_eq!(message.priority, 2);
             assert_eq!(message.msu, msu);
         }
-        _ => panic!("Expected UserData"),
+        _ => panic!("expected UserData"),
     }
 }
 
-/// State machine: full alignment sequence.
+#[test]
+fn user_data_empty_msu_round_trips() {
+    let msg = M2paMessage::UserData {
+        bsn: 0,
+        fsn: 1,
+        message: UserDataMessage::new(0, Vec::new()),
+    };
+    let decoded = M2paMessage::decode(&msg.encode().unwrap()).unwrap();
+    match decoded {
+        M2paMessage::UserData { message, .. } => assert!(message.msu.is_empty()),
+        _ => panic!("expected UserData"),
+    }
+}
+
+#[test]
+fn user_data_large_msu_round_trips() {
+    let msu: Vec<u8> = (0..272u32).map(|i| i as u8).collect(); // an MTP3-sized MSU
+    let msg = M2paMessage::UserData {
+        bsn: 0x0012_3456,
+        fsn: 0x0012_3457,
+        message: UserDataMessage::new(3, msu.clone()),
+    };
+    let decoded = M2paMessage::decode(&msg.encode().unwrap()).unwrap();
+    match decoded {
+        M2paMessage::UserData { message, .. } => assert_eq!(message.msu, msu),
+        _ => panic!("expected UserData"),
+    }
+}
+
+// ── Common header validation ────────────────────────────────────────────────
+
+#[test]
+fn header_validation_errors() {
+    // Wrong version.
+    assert!(CommonMessageHeader::decode([2, 0, 11, 1, 0, 0, 0, 20]).is_err());
+    // Wrong class.
+    assert!(CommonMessageHeader::decode([1, 0, 12, 1, 0, 0, 0, 20]).is_err());
+    // Wrong type (not 1 or 2).
+    assert!(CommonMessageHeader::decode([1, 0, 11, 3, 0, 0, 0, 20]).is_err());
+    // Non-zero spare.
+    assert!(CommonMessageHeader::decode([1, 1, 11, 1, 0, 0, 0, 20]).is_err());
+}
+
+#[test]
+fn decode_rejects_truncated_message() {
+    // Anything shorter than the two 8-byte headers can't be a message.
+    assert!(matches!(
+        M2paMessage::decode(&[0x01, 0x00, 0x0b, 0x02]),
+        Err(M2paError::TooShort { .. })
+    ));
+}
+
+// ── State machine ───────────────────────────────────────────────────────────
+
 #[test]
 fn state_machine_full_alignment() {
     let mut sm = M2paStateMachine::new();
     assert_eq!(sm.state(), M2paState::OutOfService);
 
-    // Start alignment
-    sm.start();
+    assert!(sm.start());
     assert_eq!(sm.state(), M2paState::NotAligned);
 
-    // Peer sends Alignment
     sm.on_link_status(LinkState::Alignment);
     assert_eq!(sm.state(), M2paState::Aligned);
 
-    // Peer sends Proving Normal
     sm.on_link_status(LinkState::ProvingNormal);
     assert_eq!(sm.state(), M2paState::Proving);
 
-    // Peer sends Ready
     sm.on_link_status(LinkState::Ready);
     assert_eq!(sm.state(), M2paState::AlignedReady);
 
-    // Peer sends Ready again → In Service!
     sm.on_link_status(LinkState::Ready);
     assert_eq!(sm.state(), M2paState::InService);
 }
 
-/// Decode M2PA Link Status Ready from known wire bytes.
 #[test]
-fn decode_link_status_ready_wire() {
-    let hex_str = "01000b020000001400ffffff00ffffff00000004";
-    let bytes = hex::decode(hex_str).unwrap();
-    let msg = M2paMessage::decode(&bytes).unwrap();
-    match msg {
-        M2paMessage::LinkStatus { bsn, fsn, message } => {
-            assert_eq!(bsn, 0xFFFFFF);
-            assert_eq!(fsn, 0xFFFFFF);
-            assert_eq!(message.state, LinkState::Ready);
-        }
-        _ => panic!("Expected LinkStatus Ready"),
-    }
+fn state_machine_processor_outage_recovery() {
+    let mut sm = M2paStateMachine::new();
+    sm.start();
+    sm.on_link_status(LinkState::Alignment);
+    sm.on_link_status(LinkState::ProvingNormal);
+    sm.on_link_status(LinkState::Ready);
+    sm.on_link_status(LinkState::Ready);
+    assert_eq!(sm.state(), M2paState::InService);
+
+    sm.on_link_status(LinkState::ProcessorOutage);
+    assert_eq!(sm.state(), M2paState::AlignedReady);
+
+    sm.on_link_status(LinkState::ProcessorRecovered);
+    assert_eq!(sm.state(), M2paState::InService);
 }
 
-/// Decode M2PA Link Status Alignment from known wire bytes.
 #[test]
-fn decode_link_status_alignment_wire() {
-    let hex_str = "01000b020000001400ffffff00ffffff00000001";
-    let bytes = hex::decode(hex_str).unwrap();
-    let msg = M2paMessage::decode(&bytes).unwrap();
-    match msg {
-        M2paMessage::LinkStatus { message, .. } => {
-            assert_eq!(message.state, LinkState::Alignment);
-        }
-        _ => panic!("Expected LinkStatus Alignment"),
-    }
-}
-
-/// Decode M2PA Link Status Processor Outage from known wire bytes.
-#[test]
-fn decode_link_status_processor_outage_wire() {
-    let hex_str = "01000b020000001400ffffff00ffffff00000005";
-    let bytes = hex::decode(hex_str).unwrap();
-    let msg = M2paMessage::decode(&bytes).unwrap();
-    match msg {
-        M2paMessage::LinkStatus { message, .. } => {
-            assert_eq!(message.state, LinkState::ProcessorOutage);
-        }
-        _ => panic!("Expected LinkStatus ProcessorOutage"),
-    }
-}
-
-/// All 8 Link Status states from wire format.
-#[test]
-fn decode_all_link_status_states_from_wire() {
-    let states = [
-        ("01000b020000001400ffffff00ffffff00000001", LinkState::Alignment),
-        ("01000b020000001400ffffff00ffffff00000002", LinkState::ProvingNormal),
-        ("01000b020000001400ffffff00ffffff00000003", LinkState::ProvingEmergency),
-        ("01000b020000001400ffffff00ffffff00000004", LinkState::Ready),
-        ("01000b020000001400ffffff00ffffff00000005", LinkState::ProcessorOutage),
-        ("01000b020000001400ffffff00ffffff00000006", LinkState::ProcessorRecovered),
-        ("01000b020000001400ffffff00ffffff00000007", LinkState::Busy),
-        ("01000b020000001400ffffff00ffffff00000008", LinkState::BusyEnded),
-    ];
-
-    for (hex_str, expected_state) in states {
-        let bytes = hex::decode(hex_str).unwrap();
-        let msg = M2paMessage::decode(&bytes).unwrap();
-        match msg {
-            M2paMessage::LinkStatus { message, .. } => {
-                assert_eq!(message.state, expected_state, "Failed for {hex_str}");
-            }
-            _ => panic!("Expected LinkStatus for {hex_str}"),
-        }
-    }
-}
-
-/// Common header validation rejects invalid values.
-#[test]
-fn header_validation_errors() {
-    // Wrong version
-    let buf = [2, 0, 11, 1, 0, 0, 0, 20];
-    assert!(CommonMessageHeader::decode(buf).is_err());
-
-    // Wrong class
-    let buf = [1, 0, 12, 1, 0, 0, 0, 20];
-    assert!(CommonMessageHeader::decode(buf).is_err());
-
-    // Wrong type (not 1 or 2)
-    let buf = [1, 0, 11, 3, 0, 0, 0, 20];
-    assert!(CommonMessageHeader::decode(buf).is_err());
-
-    // Non-zero spare
-    let buf = [1, 1, 11, 1, 0, 0, 0, 20];
-    assert!(CommonMessageHeader::decode(buf).is_err());
+fn state_machine_unexpected_transition_drops_out_of_service() {
+    let mut sm = M2paStateMachine::new();
+    sm.start();
+    // Receiving Ready while merely NotAligned is not a valid transition.
+    sm.on_link_status(LinkState::Ready);
+    assert_eq!(sm.state(), M2paState::OutOfService);
 }

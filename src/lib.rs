@@ -14,17 +14,39 @@
 //!
 //! - Stream 0: Link Status messages
 //! - Stream 1: User Data messages (MTP3 MSUs)
+//!
+//! # Example
+//!
+//! ```
+//! use m2pa::{LinkState, LinkStatusMessage, M2paMessage};
+//!
+//! // Build a Link Status "Ready" and serialise it to the wire.
+//! let msg = M2paMessage::LinkStatus {
+//!     bsn: 0xFFFFFF,
+//!     fsn: 0xFFFFFF,
+//!     message: LinkStatusMessage::new(LinkState::Ready),
+//! };
+//! let bytes = msg.encode().unwrap();
+//! assert_eq!(bytes.len(), 20);
+//!
+//! // Parse it back.
+//! let decoded = M2paMessage::decode(&bytes).unwrap();
+//! assert!(matches!(decoded, M2paMessage::LinkStatus { .. }));
+//! ```
 
 pub mod error;
 pub mod link_status;
 pub mod state_machine;
 pub mod user_data;
 
+#[cfg(feature = "python")]
+pub mod python;
+
 use std::fmt;
 
 use modular_bitfield_msb::{
     bitfield,
-    specifiers::{B8, B24, B32},
+    specifiers::{B24, B32, B8},
 };
 
 pub use error::M2paError;
@@ -230,9 +252,12 @@ impl M2paMessage {
             M2paMessage::UserData { bsn, fsn, message } => {
                 (MESSAGE_TYPE_USER_DATA, *bsn, *fsn, message.encode())
             }
-            M2paMessage::LinkStatus { bsn, fsn, message } => {
-                (MESSAGE_TYPE_LINK_STATUS, *bsn, *fsn, message.encode().to_vec())
-            }
+            M2paMessage::LinkStatus { bsn, fsn, message } => (
+                MESSAGE_TYPE_LINK_STATUS,
+                *bsn,
+                *fsn,
+                message.encode().to_vec(),
+            ),
         };
 
         let total_len = 16 + body.len();

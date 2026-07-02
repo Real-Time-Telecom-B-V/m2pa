@@ -156,7 +156,10 @@ mod tests {
 
     #[test]
     fn link_state_display() {
-        assert_eq!(format!("{}", LinkState::ProvingEmergency), "Proving Emergency");
+        assert_eq!(
+            format!("{}", LinkState::ProvingEmergency),
+            "Proving Emergency"
+        );
         assert_eq!(format!("{}", LinkState::Ready), "Ready");
     }
 }

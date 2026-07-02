@@ -1,0 +1,42 @@
+# Versioning
+
+`m2pa` follows [Semantic Versioning 2.0.0](https://semver.org/).
+
+Unlike an application, **m2pa is a library — its public Rust API _is_ the
+contract.** Everything reachable as `pub` from the crate root (the codec types
+`M2paMessage` / `CommonMessageHeader` / `M2PAHeader` / `UserDataMessage` /
+`LinkStatusMessage`, the `LinkState` / `M2paState` enums, the `M2paStateMachine`,
+and `M2paError`) is covered. The Python surface tracks the same contract.
+
+## The git tag is the source of truth
+
+`Cargo.toml`'s `version` is set to match the release tag, and the release
+workflow's `verify-version` job **refuses to publish** if they disagree. To
+release, bump `version`, commit, tag `vX.Y.Z`, and push the tag — the tag push
+publishes the crate (and, when enabled, the wheels) at `X.Y.Z`.
+
+## The rule
+
+**MAJOR (`X.0.0`)** — breaks the public API:
+
+- Remove / rename / change the signature of a `pub` item.
+- Change documented behavior in a way that breaks existing callers.
+- Removals happen only **one minor after** a deprecation.
+
+**MINOR (`x.Y.0`)** — backward-compatible additions:
+
+- New `pub` items (message shapes, state-machine hooks, constructors, constants).
+- **Deprecations** — mark deprecated, keep it working (removal is the next major).
+- An MSRV bump (called out in the changelog).
+
+**PATCH (`x.y.Z`)** — backward-compatible fixes:
+
+- Bug fixes, performance improvements, behavior-neutral dependency bumps.
+- **RFC 4165 conformance corrections** — *even when they change observable wire
+  behavior.* The contract is "spec-compliant", so a correction toward the
+  specification is a fix, not a break. **Document it loudly in the changelog.**
+
+## Pre-releases
+
+`X.Y.Z-rc.N` for validation before a stable tag. The crates.io "newest" pointer
+advances only on stable releases.

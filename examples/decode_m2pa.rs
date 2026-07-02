@@ -1,14 +1,17 @@
 //! Decode an M2PA packet from a hex dump.
 //!
-//! This example decodes a real M2PA Link Status message
-//! (Proving Emergency) captured from a Wireshark trace.
+//! The vector below is the RFC 4165 wire encoding of a Link Status message
+//! (Proving Emergency): a pure control signal — version/class/type/length plus
+//! the BSN/FSN sentinels and the state word — built straight from the spec and
+//! carrying no user data. It is byte-identical to what `M2paMessage::encode`
+//! produces for the same message.
 
 use m2pa::M2paMessage;
 
 fn main() {
     // M2PA Link Status: Proving Emergency
     // Common Header: version=1, spare=0, class=11, type=2, length=20
-    // M2PA Header: BSN=0xFFFFFF, FSN=0xFFFFFF
+    // M2PA Header: BSN=0xFFFFFF, FSN=0xFFFFFF (RFC initial sentinels)
     // Body: state=3 (Proving Emergency)
     let hex_str = "01000b020000001400ffffff00ffffff00000003";
     let bytes: Vec<u8> = hex::decode(hex_str).expect("Invalid hex string");

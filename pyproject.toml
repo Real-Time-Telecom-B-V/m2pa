@@ -1,0 +1,36 @@
+# Maturin build config for the `m2pa` wheel. The version is single-sourced from
+# Cargo.toml (`dynamic = ["version"]`), so PyPI and crates.io always ship the same
+# number. `extension-module` is the ONLY place that feature is enabled — never by
+# `cargo test`/`cargo clippy` (it un-links libpython and breaks Rust test binaries).
+[build-system]
+requires = ["maturin>=1.7,<2"]
+build-backend = "maturin"
+
+[project]
+name = "m2pa"
+description = "Rust-backed M2PA (RFC 4165) codec + link state machine for Python"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [{ name = "Matthias van der Vlies" }]
+keywords = ["m2pa", "ss7", "sigtran", "sctp", "mtp3"]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Telecommunications Industry",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Rust",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: Free Threading :: 3 - Stable",
+    "Topic :: Communications",
+]
+dynamic = ["version"]
+
+[project.urls]
+Homepage = "https://github.com/killdashnine/m2pa"
+Repository = "https://github.com/killdashnine/m2pa"
+
+[tool.maturin]
+# Mixed layout: compiled ext at `m2pa._m2pa`, pure-Python shim under python/.
+module-name = "m2pa._m2pa"
+python-source = "python"
+features = ["extension-module"]

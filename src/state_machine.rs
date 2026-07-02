@@ -222,9 +222,6 @@ mod tests {
     #[test]
     fn display() {
         let sm = M2paStateMachine::new();
-        assert_eq!(
-            format!("{sm}"),
-            "M2PA State Machine [state=Out of Service]"
-        );
+        assert_eq!(format!("{sm}"), "M2PA State Machine [state=Out of Service]");
     }
 }
