@@ -16,7 +16,7 @@ and the M2PA timers belong to the runtime that hosts the link (see
 | §2.1 | Message Class = 11 (M2PA) | ✅ | else `M2paError::InvalidMessageClass` |
 | §2.1 | Message Type — 1 = User Data, 2 = Link Status | ✅ | else `M2paError::InvalidMessageType` |
 | §2.2 | M2PA-specific header — BSN, FSN (24-bit, right-aligned in 32 bits, top octet unused) | ✅ | `M2PAHeader` |
-| §3.2 | User Data message — Priority + User Data (MTP3 MSU) | ✅ | `UserDataMessage`; priority masked to its 2 valid bits |
+| §3.2 | User Data message — Priority + User Data (MTP3 MSU) | ✅ | `UserDataMessage`; priority in the two most significant bits of the first Data octet; no Data field in an acknowledgement-only message |
 | §3.3 | Link Status message — State field | ✅ | `LinkStatusMessage` |
 | §3.3 | Link Status states 1–8: Alignment, Proving Normal, Proving Emergency, Ready, Processor Outage, Processor Recovered, Busy, Busy Ended | ✅ | `LinkState`; unknown value → `M2paError::InvalidLinkStatus` |
 

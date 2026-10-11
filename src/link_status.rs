@@ -15,6 +15,7 @@ use crate::error::M2paError;
 ///     6         Processor Recovered
 ///     7         Busy
 ///     8         Busy Ended
+///     9         Out of Service
 /// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u32)]
@@ -27,6 +28,8 @@ pub enum LinkState {
     ProcessorRecovered = 6,
     Busy = 7,
     BusyEnded = 8,
+    /// The link can neither send nor receive MSUs (replaces the SIOS of MTP2).
+    OutOfService = 9,
 }
 
 impl LinkState {
@@ -40,6 +43,7 @@ impl LinkState {
             6 => Ok(Self::ProcessorRecovered),
             7 => Ok(Self::Busy),
             8 => Ok(Self::BusyEnded),
+            9 => Ok(Self::OutOfService),
             other => Err(M2paError::InvalidLinkStatus(other)),
         }
     }
@@ -56,6 +60,7 @@ impl fmt::Display for LinkState {
             Self::ProcessorRecovered => write!(f, "Processor Recovered"),
             Self::Busy => write!(f, "Busy"),
             Self::BusyEnded => write!(f, "Busy Ended"),
+            Self::OutOfService => write!(f, "Out of Service"),
         }
     }
 }
@@ -130,7 +135,8 @@ mod tests {
     #[test]
     fn link_state_invalid() {
         assert!(LinkState::from_u32(0).is_err());
-        assert!(LinkState::from_u32(9).is_err());
+        assert_eq!(LinkState::from_u32(9).unwrap(), LinkState::OutOfService);
+        assert!(LinkState::from_u32(10).is_err());
         assert!(LinkState::from_u32(255).is_err());
     }
 
