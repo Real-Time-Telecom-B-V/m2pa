@@ -49,6 +49,7 @@ pub enum PyLinkState {
     ProcessorRecovered = 6,
     Busy = 7,
     BusyEnded = 8,
+    OutOfService = 9,
 }
 
 impl PyLinkState {
@@ -62,6 +63,7 @@ impl PyLinkState {
             PyLinkState::ProcessorRecovered => CoreLinkState::ProcessorRecovered,
             PyLinkState::Busy => CoreLinkState::Busy,
             PyLinkState::BusyEnded => CoreLinkState::BusyEnded,
+            PyLinkState::OutOfService => CoreLinkState::OutOfService,
         }
     }
 
@@ -75,6 +77,7 @@ impl PyLinkState {
             CoreLinkState::ProcessorRecovered => PyLinkState::ProcessorRecovered,
             CoreLinkState::Busy => PyLinkState::Busy,
             CoreLinkState::BusyEnded => PyLinkState::BusyEnded,
+            CoreLinkState::OutOfService => PyLinkState::OutOfService,
         }
     }
 }

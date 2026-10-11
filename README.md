@@ -49,7 +49,7 @@ msg = m2pa.decode(wire)                          # -> LinkStatus | UserData
 | Common Message Header — version / spare / class / type / length | `CommonMessageHeader` |
 | M2PA Header — 24-bit BSN + FSN | `M2PAHeader` |
 | User Data message — priority + MTP3 MSU | `UserDataMessage` |
-| Link Status message — the 8 RFC 4165 states | `LinkStatusMessage`, `LinkState` |
+| Link Status message — the 9 RFC 4165 states | `LinkStatusMessage`, `LinkState` |
 | Whole-message encode/decode with validation | `M2paMessage` |
 | Link state machine (§4) | `M2paStateMachine`, `M2paState` |
 | Typed errors | `M2paError` |
@@ -62,7 +62,7 @@ msg = m2pa.decode(wire)                          # -> LinkStatus | UserData
 | Header validation — version = 1, spare = 0, class = 11, type ∈ {1, 2} | ✅ rejected as `M2paError` |
 | M2PA Header — BSN / FSN (24-bit, right-aligned in 32) | ✅ |
 | User Data message — priority (2-bit) + MTP3 MSU | ✅ `UserDataMessage` |
-| Link Status message — all 8 states (Alignment … Busy Ended) | ✅ `LinkState` |
+| Link Status message — all 9 states (Alignment … Out of Service) | ✅ `LinkState` |
 | Link state machine — OOS → Not Aligned → Aligned → Proving → Aligned Ready → In Service | ✅ `M2paStateMachine` |
 | Processor outage / recovery + Busy flow-control transitions | ✅ |
 | SCTP stream convention (0 = Link Status, 1 = User Data) | ✅ exposed as `SCTP_STREAM` constants |

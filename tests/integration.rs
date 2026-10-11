@@ -91,9 +91,11 @@ fn all_link_states_round_trip_and_match_wire() {
 
 #[test]
 fn decode_rejects_unknown_link_state() {
-    // State 9 is not defined in RFC 4165 §3.3.
-    let err = M2paMessage::decode(&link_status_wire(9)).unwrap_err();
-    assert!(matches!(err, M2paError::InvalidLinkStatus(9)));
+    // RFC 4165 2.3.2 defines 1 to 9; 0 and 10 are not states.
+    for value in [0, 10] {
+        let err = M2paMessage::decode(&link_status_wire(value)).unwrap_err();
+        assert!(matches!(err, M2paError::InvalidLinkStatus(v) if v == value));
+    }
 }
 
 // ── User Data ───────────────────────────────────────────────────────────────
@@ -223,4 +225,125 @@ fn state_machine_unexpected_transition_drops_out_of_service() {
     // Receiving Ready while merely NotAligned is not a valid transition.
     sm.on_link_status(LinkState::Ready);
     assert_eq!(sm.state(), M2paState::OutOfService);
+}
+
+// ── RFC 4165 2.3: what a conformant peer sends that 1.0.0 could not read ─────
+
+#[test]
+fn out_of_service_is_link_status_nine() {
+    // RFC 4165 2.3.2, the table of State values: "9  Out of Service (OOS)".
+    // 4.1.3: "After the association is established, M2PA SHALL send a Link
+    // Status Out of Service message to its peer."
+    let wire = link_status_wire(9);
+    match M2paMessage::decode(&wire).unwrap() {
+        M2paMessage::LinkStatus { message, .. } => {
+            assert_eq!(message.state, LinkState::OutOfService);
+            assert_eq!(message.state.to_string(), "Out of Service");
+        }
+        _ => panic!("expected LinkStatus"),
+    }
+    let sent = M2paMessage::LinkStatus {
+        bsn: 0xFF_FFFF,
+        fsn: 0xFF_FFFF,
+        message: LinkStatusMessage::new(LinkState::OutOfService),
+    };
+    assert_eq!(sent.encode().unwrap(), wire);
+}
+
+#[test]
+fn an_out_of_service_status_takes_the_state_machine_out_of_service() {
+    let mut sm = M2paStateMachine::new();
+    sm.start();
+    sm.on_link_status(LinkState::Alignment);
+    assert_eq!(sm.state(), M2paState::Aligned);
+    assert_eq!(
+        sm.on_link_status(LinkState::OutOfService),
+        M2paState::OutOfService
+    );
+}
+
+#[test]
+fn a_proving_status_may_carry_filler() {
+    // RFC 4165 2.3.2.1: "The Link Status Proving message may optionally carry
+    // additional bytes."
+    let mut wire = link_status_wire(2);
+    wire.extend_from_slice(&[0xAA; 12]);
+    wire[4..8].copy_from_slice(&32u32.to_be_bytes());
+    match M2paMessage::decode(&wire).unwrap() {
+        M2paMessage::LinkStatus { message, .. } => {
+            assert_eq!(message.state, LinkState::ProvingNormal)
+        }
+        _ => panic!("expected LinkStatus"),
+    }
+}
+
+/// A User Data message with the given BSN, FSN and Data field, written from
+/// RFC 4165 2.1, 2.2 and 2.3.1.
+fn user_data_wire(bsn: u32, fsn: u32, data: &[u8]) -> Vec<u8> {
+    let mut v = vec![0x01, 0x00, 0x0b, 0x01];
+    v.extend_from_slice(&(16 + data.len() as u32).to_be_bytes());
+    v.extend_from_slice(&bsn.to_be_bytes());
+    v.extend_from_slice(&fsn.to_be_bytes());
+    v.extend_from_slice(data);
+    v
+}
+
+#[test]
+fn an_acknowledgement_only_user_data_has_no_data_field() {
+    // RFC 4165 2.3.1: "The User Data is an optional field. It need not be
+    // included in an acknowledgement-only message." 4.2.1: "M2PA SHOULD
+    // generate and send a User Data message with no data payload".
+    let wire = user_data_wire(7, 3, &[]);
+    assert_eq!(wire.len(), 16);
+    match M2paMessage::decode(&wire).unwrap() {
+        M2paMessage::UserData { bsn, fsn, message } => {
+            assert_eq!((bsn, fsn), (7, 3));
+            assert!(message.is_empty());
+            assert!(message.msu.is_empty());
+        }
+        _ => panic!("expected UserData"),
+    }
+    let sent = M2paMessage::UserData {
+        bsn: 7,
+        fsn: 3,
+        message: UserDataMessage::empty(),
+    };
+    assert_eq!(sent.encode().unwrap(), wire);
+    // A message built with no MSU is the same acknowledgement.
+    let built = M2paMessage::UserData {
+        bsn: 7,
+        fsn: 3,
+        message: UserDataMessage::new(0, Vec::new()),
+    };
+    assert_eq!(built.encode().unwrap(), wire);
+}
+
+#[test]
+fn the_priority_is_the_two_high_bits_of_the_first_data_octet() {
+    // RFC 4165 2.3.1: the first octet of the Data field is "|PRI| spare |",
+    // PRI in bits 0 and 1 of a figure that numbers from the most significant bit.
+    let msu = [0x83, 0x01, 0x00, 0x00, 0x00, 0x09];
+    let mut data = vec![0xC0];
+    data.extend_from_slice(&msu);
+    let wire = user_data_wire(0, 1, &data);
+    match M2paMessage::decode(&wire).unwrap() {
+        M2paMessage::UserData { message, .. } => {
+            assert_eq!(message.priority, 3);
+            assert_eq!(message.msu, msu);
+        }
+        _ => panic!("expected UserData"),
+    }
+    let sent = M2paMessage::UserData {
+        bsn: 0,
+        fsn: 1,
+        message: UserDataMessage::new(3, msu.to_vec()),
+    };
+    assert_eq!(sent.encode().unwrap(), wire);
+    // The spare bits are not the priority.
+    let mut spare = wire.clone();
+    spare[16] = 0x03;
+    match M2paMessage::decode(&spare).unwrap() {
+        M2paMessage::UserData { message, .. } => assert_eq!(message.priority, 0),
+        _ => panic!("expected UserData"),
+    }
 }

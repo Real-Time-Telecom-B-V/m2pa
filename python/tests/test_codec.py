@@ -27,6 +27,7 @@ ALL_LINK_STATES = [
     m2pa.LinkState.ProcessorRecovered,
     m2pa.LinkState.Busy,
     m2pa.LinkState.BusyEnded,
+    m2pa.LinkState.OutOfService,
 ]
 
 
@@ -95,7 +96,7 @@ def test_user_data_empty_msu() -> None:
 
 
 def test_decode_rejects_unknown_state() -> None:
-    bad = bytes.fromhex("01000b020000001400ffffff00ffffff00000009")  # state 9
+    bad = bytes.fromhex("01000b020000001400ffffff00ffffff0000000a")  # state 10
     with pytest.raises(m2pa.M2paError):
         m2pa.decode(bad)
 
