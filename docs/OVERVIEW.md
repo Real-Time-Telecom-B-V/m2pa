@@ -20,7 +20,7 @@ format and that link lifecycle; it does not open sockets.
 |---|---|
 | `src/lib.rs` | Crate root: the `CommonMessageHeader` + `M2PAHeader` bitfields, the `M2paMessage` enum with whole-message `encode`/`decode`, protocol constants, and re-exports. |
 | `src/error.rs` | `M2paError` — the typed rejection set (`thiserror`). |
-| `src/link_status.rs` | `LinkState` (the 8 RFC §3.3 states) + `LinkStatusMessage` body codec. |
+| `src/link_status.rs` | `LinkState` (the 9 RFC 4165 2.3.2 states) + `LinkStatusMessage` body codec. |
 | `src/user_data.rs` | `UserDataMessage` — 2-bit priority + MTP3 MSU payload. |
 | `src/state_machine.rs` | `M2paStateMachine` / `M2paState` — the RFC §4 link lifecycle. |
 | `src/python.rs` | PyO3 bindings (`--features python`); mirrors the surface above. |
@@ -54,7 +54,7 @@ never disagree with the payload.
 |---|---|
 | Common + M2PA header pack/unpack (with validation) | ✅ |
 | User Data (priority + MTP3 MSU) codec | ✅ |
-| Link Status codec — all 8 states | ✅ |
+| Link Status codec — all 9 states | ✅ |
 | Link state machine (§4, incl. outage/recovery + busy) | ✅ |
 | Python bindings (mirror + `register()` embed hook) | ✅ (`--features python`) |
 | Memory: flat under encode/decode + state-machine churn | ✅ (counting-allocator leak check) |

@@ -36,28 +36,43 @@ impl UserDataMessage {
         }
     }
 
-    /// Decode from bytes after M2PA header.
-    ///
-    /// Layout: 1 byte priority (upper byte of 2-byte field) + N bytes MSU.
-    /// The priority is in the first byte; the second byte of the priority field
-    /// is spare. The MSU follows.
-    pub fn decode(bytes: &[u8]) -> Result<Self, M2paError> {
-        // Need at least the 1-byte priority field
-        if bytes.is_empty() {
-            return Err(M2paError::TooShort {
-                expected: 1,
-                actual: 0,
-            });
+    /// An acknowledgement-only message: no Data field at all (RFC 4165 2.3.1,
+    /// 4.2.1). It carries a BSN and is not itself acknowledged.
+    pub fn empty() -> Self {
+        Self {
+            priority: 0,
+            msu: Vec::new(),
         }
-        let priority = bytes[0] & 0x03;
-        let msu = bytes[1..].to_vec();
-        Ok(Self { priority, msu })
     }
 
-    /// Encode to bytes: 1 byte priority + MSU.
+    /// Whether this is an acknowledgement-only message (no MSU).
+    pub fn is_empty(&self) -> bool {
+        self.msu.is_empty()
+    }
+
+    /// Decode the Data field (the octets after the M2PA header).
+    ///
+    /// The first octet is `|PRI| spare |` with the priority in its two most
+    /// significant bits (RFC 4165 2.3.1); the MSU (SIO + SIF) follows. An absent
+    /// Data field is an acknowledgement-only message.
+    pub fn decode(bytes: &[u8]) -> Result<Self, M2paError> {
+        match bytes.split_first() {
+            None => Ok(Self::empty()),
+            Some((first, msu)) => Ok(Self {
+                priority: first >> 6,
+                msu: msu.to_vec(),
+            }),
+        }
+    }
+
+    /// Encode the Data field: the priority octet, then the MSU. A message with
+    /// no MSU encodes to nothing, the acknowledgement-only form.
     pub fn encode(&self) -> Vec<u8> {
+        if self.msu.is_empty() {
+            return Vec::new();
+        }
         let mut buf = Vec::with_capacity(1 + self.msu.len());
-        buf.push(self.priority & 0x03);
+        buf.push((self.priority & 0x03) << 6);
         buf.extend_from_slice(&self.msu);
         buf
     }
@@ -95,8 +110,12 @@ mod tests {
     }
 
     #[test]
-    fn decode_empty_fails() {
-        assert!(UserDataMessage::decode(&[]).is_err());
+    fn an_absent_data_field_is_an_acknowledgement() {
+        // RFC 4165 2.3.1: the Data field "need not be included in an
+        // acknowledgement-only message".
+        let ack = UserDataMessage::decode(&[]).unwrap();
+        assert!(ack.is_empty());
+        assert!(UserDataMessage::empty().encode().is_empty());
     }
 
     #[test]
